@@ -1,2 +1,3 @@
 # cgf-clips
-Clip hosting
+
+Public hosting for video clips (Buffer scheduling).
