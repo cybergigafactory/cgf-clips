@@ -1,0 +1,34 @@
+name: linkcheck
+# Daily check of all scheduled Buffer video posts. Fails (exit 1) on a dead link or a Buffer error post,
+# GitHub then sends the failure e-mail to the account owner. No LLM, read-only.
+# 05:20 UTC = 07:20 Berlin summer time (CEST); from 25.10.2026 (CET, UTC+1) it runs at 06:20 Berlin. One cron cannot cover both.
+on:
+  schedule:
+    - cron: "20 5 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write   # only for the keepalive step below
+concurrency:
+  group: linkcheck
+  cancel-in-progress: false
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - name: Check Buffer video links
+        env:
+          BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
+          BUFFER_ORG_ID: ${{ secrets.BUFFER_ORG_ID }}
+          BUFFER_CHANNEL_ID_X: ${{ secrets.BUFFER_CHANNEL_ID_X }}
+        run: python3 .github/scripts/check_links.py
+      - name: Keepalive (re-enable this workflow so GitHub does not pause it after 60 days without repo activity)
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow enable linkcheck.yml --repo "$GITHUB_REPOSITORY"
