@@ -1,0 +1,44 @@
+name: cleanup
+# Weekly deletion of unused hosted clips (not referenced by a pending Buffer post, and older than 7 days).
+# 12:00 UTC = 13:00 Berlin in CET (UTC+1). During CEST (UTC+2, last Sunday in March until last Sunday in October)
+# this is 14:00 Berlin. One cron cannot cover both. GitHub cron can be delayed by minutes.
+# Fails (exit 1) on a Buffer-read problem or a safety abort; GitHub then mails the account owner.
+# No LLM. Scheduled runs apply deletions; workflow_dispatch defaults to dry_run=true.
+on:
+  schedule:
+    - cron: "0 12 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "List keep/delete only, do not commit or push"
+        type: boolean
+        default: true
+permissions:
+  contents: write
+concurrency:
+  group: cleanup
+  cancel-in-progress: false
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          filter: blob:none
+          fetch-depth: 0
+          sparse-checkout: .github
+          persist-credentials: true
+      - name: Cleanup unused clips
+        env:
+          BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
+          BUFFER_ORG_ID: ${{ secrets.BUFFER_ORG_ID }}
+          BUFFER_CHANNEL_ID_X: ${{ secrets.BUFFER_CHANNEL_ID_X }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
+            python3 .github/scripts/cleanup_clips.py --dry-run
+          else
+            python3 .github/scripts/cleanup_clips.py
+          fi
